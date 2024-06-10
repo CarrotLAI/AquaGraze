@@ -13,6 +13,8 @@ char pass[] = "PLDTWIFIdbe9z";
 #define LED V1
 #define SERVO_OUTPUT V2
 #define GREEN_LIGHT 15
+#define BUZZER 16
+#define SERVO 13
 
 
 //Libraries
@@ -60,8 +62,9 @@ void setup()
   Wire.begin();
   lcd.init();
   lcd.backlight();
-  servo.attach(13); 
+  servo.attach(SERVO); 
   pinMode(GREEN_LIGHT, OUTPUT);
+  pinMode(BUZZER, OUTPUT);
   Blynk.begin(auth, ssid, pass);
   delay(100);
   lcd.setCursor(0,0);
@@ -82,11 +85,14 @@ void loop() {
     lcd.setCursor(0,0);
     lcd.print("Feeding");
     Serial.print(text);
-    servo.attach(13);
+    digitalWrite(BUZZER, HIGH);
+    servo.attach(SERVO);
     servo.write(servo_on);
     Blynk.virtualWrite(V2, servo_on);
     delay(500);
     servo.detach();
+    delay(500);
+    digitalWrite(BUZZER, LOW);
     idle_position = servo_on; 
 //    Serial.print(" ", + idle_position);
   } else if (ledPin == 0 && idle_position != servo_off){ 
@@ -96,11 +102,14 @@ void loop() {
     lcd.setCursor(0,0);
     lcd.print("Stop");
     Serial.print(text);
-    servo.attach(13);
+    digitalWrite(BUZZER, HIGH);
+    servo.attach(SERVO);
     servo.write(servo_off);
     Blynk.virtualWrite(V2, servo_off);
     delay(500);
     servo.detach();
+    delay(500);
+    digitalWrite(BUZZER, LOW);
     idle_position = servo_off;
 //    Serial.print(" ", + idle_position);
   }
