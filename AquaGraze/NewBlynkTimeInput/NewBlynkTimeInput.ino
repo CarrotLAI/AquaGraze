@@ -14,9 +14,8 @@
 // Define pins
 #define SERVOBTN V0
 #define LED V1
-#define SERVO_OUTPUT V2
 #define LCD V5
-
+#define SERVO_OUTPUT V2
 #define GREEN_LIGHT 15
 #define BUZZER 16
 #define SERVO 13
@@ -64,7 +63,6 @@ unsigned char day_of_week;
 bool led_status[2];
 bool update_blynk_status[2];
 bool led_timer_on_set[2];
-bool isOpenLid_flag = false;
 //---------------------------------//
 
 int idle_position = 0;
@@ -81,31 +79,11 @@ BLYNK_WRITE(LED)
   int val = param.asInt();
 
   if (led_timer_on_set[1] == 0)
-  {
-    led_set[0] = val;
-    //    Blynk.virtualWrite(LCD, val);
-    Serial.println("Button Pressed");
-  }
-  if (led_timer_on_set[0] == 0)
-  {
     led_set[1] = val;
-    //    Blynk.virtualWrite(LCD, val);
-    Serial.println("Button Pressed");
-  }
-  else
-  {
-    update_blynk_status[0] = 1;
-    update_blynk_status[1] = 1;
-    Blynk.virtualWrite(LCD, "Waiting...");
-    Serial.println("Waiting...");
-  }
+  Blynk.virtualWrite(LCD, "Button Pressed");
+  else update_blynk_status[1] = 1;
+  Blynk.virtualWrite(LCD, "Waiting...");
 }
-BLYNK_WRITE(LCD)
-{
-  String text = param.asString();
-  Blynk.virtualWrite(LCD, "print");
-}
-
 BLYNK_WRITE(SERVOBTN)
 {
   servoVal = param.asInt();
@@ -249,41 +227,30 @@ void led_mng()
 {
   bool time_set_overflow;
   bool led_status_buf[2];
-  
-  for (int i=0; i<2; i++)
+
+  for (int i = 0; i < 2; i++)
   {
     led_status_buf[i] = led_status[i];
     time_set_overflow = 0;
-    
-    if ( timer_start_set[i] != 0xFFFF && timer_stop_set[i] != 0xFFFF)
-    {
-      if ( timer_stop_set[i] < timer_start_set[i] ) time_set_overflow = 1;
 
-//      debug
-      Serial.print("rtc_sec: ");
-      Serial.println(rtc_sec);
-      Serial.print("time_stop: ");
-      Serial.println(timer_stop_set[i]);
-      Serial.print("time_start: ");
-      Serial.println(timer_start_set[i]);
-      
+    if (timer_start_set[i] != 0xFFFF && timer_stop_set[i] != 0xFFFF)
+    {
+      if (timer_stop_set[i] < timer_start_set[i])
+        time_set_overflow = 1;
 
       if ((((time_set_overflow == 0 && (rtc_sec >= timer_start_set[i]) && (rtc_sec < timer_stop_set[i])) ||
-        (time_set_overflow  && ((rtc_sec >= timer_start_set[i]) || (rtc_sec < timer_stop_set[i])))) && 
-        (weekday_set[i] == 0x00 || (weekday_set[i] & (0x01 << (day_of_week - 1) )))) )
-        {
-          led_timer_on_set[i] = 1;
-           Serial.print("led_timer_on_set[");
-          Serial.print(i);
-          Serial.println("] = 1");
-        }
-        else
-          led_timer_on_set[i] = 0;
+            (time_set_overflow && ((rtc_sec >= timer_start_set[i]) || (rtc_sec < timer_stop_set[i])))) &&
+           (weekday_set[i] == 0x00 || (weekday_set[i] & (0x01 << (day_of_week - 1))))))
+      {
+        led_timer_on_set[i] = 1;
+      }
+      else
+        led_timer_on_set[i] = 0;
     }
     else
       led_timer_on_set[i] = 0;
 
-    if ( led_timer_on_set[i] )
+    if (led_timer_on_set[i])
     {
       led_status[i] = 1;
       led_set[i] = 0;
@@ -293,12 +260,12 @@ void led_mng()
       led_status[i] = led_set[i];
     }
 
-    if ( led_status_buf[i] != led_status[i] )
-      update_blynk_status[i] = 1;  
+    if (led_status_buf[i] != led_status[i])
+      update_blynk_status[i] = 1;
   }
-    // HARDWARE CONTROL
-  // digitalWrite(D0, led_status[0]);  
-  digitalWrite(GREEN_LIGHT, led_status[1]);  
+  // HARDWARE CONTROL
+  //  digitalWrite(15, led_status[0]);
+  digitalWrite(GREEN_LIGHT, led_status[1]);
 }
 //------------------------------------//
 void blynk_update()
@@ -306,7 +273,7 @@ void blynk_update()
   if (update_blynk_status[0])
   {
     update_blynk_status[0] = 0;
-    Blynk.virtualWrite(V1, led_status[0]);
+    Blynk.virtualWrite(V0, led_status[0]);
   }
 
   if (update_blynk_status[1])
@@ -316,31 +283,20 @@ void blynk_update()
   }
 }
 //------------------------------------------------//
-void openLid_flag()
-{
-  if (led_timer_on_set[1] == 1 || led_timer_on_set[0] == 1)
-    isOpenLid_flag = true;
-  else if (led_set[0] == 1 || led_set[1] == 1)
-    isOpenLid_flag = true;
-  else
-    isOpenLid_flag = false;
-}
-
 void openLid()
 {
-  if (isOpenLid_flag == true && idle_position != servo_on)
+  if (led_timer_on_set[1] == 1 && idle_position != servo_on)
   {
     digitalWrite(GREEN_LIGHT, HIGH);
     lcd.clear();
     text = "Feeding";
     lcd.setCursor(0, 0);
     lcd.print("Feeding");
-    // Serial.print(text);
+    Serial.print(text);
     digitalWrite(BUZZER, HIGH);
     servo.attach(13);
     servo.write(servo_on);
     Blynk.virtualWrite(V2, servo_on);
-    Blynk.virtualWrite(LCD, text);
     delay(500);
     servo.detach();
     delay(500);
@@ -348,19 +304,18 @@ void openLid()
     idle_position = servo_on;
     //    Serial.print(" ", + idle_position);
   }
-  if (isOpenLid_flag == false && idle_position != servo_off)
+  else if (led_timer_on_set[1] == 0 && idle_position != servo_off)
   {
     digitalWrite(GREEN_LIGHT, LOW);
     lcd.clear();
     text = "Stop";
     lcd.setCursor(0, 0);
     lcd.print("Stop");
-    // Serial.print(text);
+    Serial.print(text);
     digitalWrite(BUZZER, HIGH);
     servo.attach(13);
     servo.write(servo_off);
     Blynk.virtualWrite(V2, servo_off);
-    Blynk.virtualWrite(LCD, text);
     delay(500);
     servo.detach();
     delay(500);
@@ -403,6 +358,210 @@ void loop()
   timer.run();
   led_mng();
   blynk_update();
-  openLid_flag();
   openLid();
 }
+
+// void setup_wifi(){
+//
+//    //Initialising if(DEBUG)Serial Monitor
+//   Serial.println();
+//   Serial.println("Disconnecting current wifi connection");
+//   WiFi.disconnect();
+//   EEPROM.begin(512); //Initialasing EEPROM
+//   delay(10);
+//   pinMode(LED_BUILTIN, OUTPUT);
+//   Serial.println();
+//   Serial.println();
+//   Serial.println("Startup");
+//   //---------------------------------------- Read eeprom for ssid and pass
+//   Serial.println("Reading EEPROM ssid");
+//   String esid;
+//   for (int i = 0; i < 32; ++i)
+//   {
+//     esid += char(EEPROM.read(i));
+//   }
+//   Serial.println();
+//   Serial.print("SSID: ");
+//   Serial.println(esid);
+//   Serial.println("Reading EEPROM pass");
+//   String epass = "";
+//   for (int i = 32; i < 96; ++i)
+//   {
+//     epass += char(EEPROM.read(i));
+//   }
+//   Serial.print("PASS: ");
+//   Serial.println(epass);
+//   WiFi.begin(esid.c_str(), epass.c_str());
+//   if (testWifi())
+//   {
+//     Serial.println("Succesfully Connected!!!");
+//     return;
+//   }
+//   else
+//   {
+//     Serial.println("Turning the HotSpot On");
+//     launchWeb();
+//     setupAP();// Setup HotSpot
+//   }
+//   Serial.println();
+//   Serial.println("Waiting.");
+//   while ((WiFi.status() != WL_CONNECTED))
+//   {
+//     Serial.print(".");
+//     delay(3000);
+//     server.handleClient();
+//   }
+//   }
+//
+////----------------------------------------------- Fuctions used for WiFi credentials saving and connecting to it which you do not need to change
+// bool testWifi(void)
+//{
+//   int c = 0;
+//   Serial.println("Waiting for Wifi to connect");
+//   lcd.clear();
+//   lcd.setCursor(0,0);
+//   lcd.print("Waiting for Wifi");
+//   lcd.setCursor(0,1);
+//   lcd.print("to connect");
+//   while ( c < 20 ) {
+//     if (WiFi.status() == WL_CONNECTED)
+//     {
+//       return true;
+//     }
+//     delay(3000);
+//     Serial.print("*");
+//     c++;
+//   }
+//   Serial.println("");
+//   lcd.clear();
+//   lcd.setCursor(0,0);
+//   lcd.print("Can't connect");
+//   lcd.setCursor(0,1);
+//   lcd.print("to a network");
+//   Serial.println("Connect timed out, opening AP"); // add LCD display
+//   return false;
+// }
+//
+//   void launchWeb()
+//{
+//   Serial.println("");
+//   if (WiFi.status() == WL_CONNECTED)
+//     Serial.println("WiFi connected");
+//   Serial.print("Local IP: ");
+//   Serial.println(WiFi.localIP());
+//   Serial.print("SoftAP IP: ");
+//   Serial.println(WiFi.softAPIP());
+//   createWebServer();
+//   // Start the server
+//   server.begin();
+//   Serial.println("Server started");
+// }
+// void setupAP(void)
+//{
+//   WiFi.mode(WIFI_STA);
+//   WiFi.disconnect();
+//   delay(100);
+//   int n = WiFi.scanNetworks();
+//   Serial.println("scan done");
+//   if (n == 0)
+//     Serial.println("no networks found");
+//   else
+//   {
+//     Serial.print(n);
+//     Serial.println(" networks found");
+//     for (int i = 0; i < n; ++i)
+//     {
+//       // Print SSID and RSSI for each network found
+//       Serial.print(i + 1);
+//       Serial.print(": ");
+//       Serial.print(WiFi.SSID(i));
+//       Serial.print(" (");
+//       Serial.print(WiFi.RSSI(i));
+//       Serial.print(")");
+//       Serial.println((WiFi.encryptionType(i) == ENC_TYPE_NONE) ? " " : "*");
+//       delay(10);
+//     }
+//   }
+//   Serial.println("");
+//   st = "<ol>";
+//   for (int i = 0; i < n; ++i)
+//   {
+//     // Print SSID and RSSI for each network found
+//     st += "<li>";
+//     st += WiFi.SSID(i);
+//     st += " (";
+//     st += WiFi.RSSI(i);
+//     st += ")";
+//     st += (WiFi.encryptionType(i) == ENC_TYPE_NONE) ? " " : "*";
+//     st += "</li>";
+//   }
+//   st += "</ol>";
+//   delay(100);
+//   WiFi.softAP("ESP8266_Hotspot", "");
+//   Serial.println("Initializing_softap_for_wifi credentials_modification");
+//   launchWeb();
+//   Serial.println("over");
+// }
+//
+// void createWebServer()
+//{
+//   {
+//     server.on("/", []() {
+//       IPAddress ip = WiFi.softAPIP();
+//       String ipStr = String(ip[0]) + '.' + String(ip[1]) + '.' + String(ip[2]) + '.' + String(ip[3]);
+//       content = "<!DOCTYPE HTML>\r\n<html>Welcome to Wifi Credentials Update page";
+//       content += "<form action=\"/scan\" method=\"POST\"><input type=\"submit\" value=\"scan\"></form>";
+//       content += ipStr;
+//       content += "<p>";
+//       content += st;
+//       content += "</p><form method='get' action='setting'><label>SSID: </label><input name='ssid' length=32><input name='pass' length=64><input type='submit'></form>";
+//       content += "</html>";
+//       server.send(200, "text/html", content);
+//     });
+//     server.on("/scan", []() {
+//       //setupAP();
+//       IPAddress ip = WiFi.softAPIP();
+//       String ipStr = String(ip[0]) + '.' + String(ip[1]) + '.' + String(ip[2]) + '.' + String(ip[3]);
+//       content = "<!DOCTYPE HTML>\r\n<html>go back";
+//       server.send(200, "text/html", content);
+//     });
+//     server.on("/setting", []() {
+//       String qsid = server.arg("ssid");
+//       String qpass = server.arg("pass");
+//       if (qsid.length() > 0 && qpass.length() > 0) {
+//         Serial.println("clearing eeprom");
+//         for (int i = 0; i < 96; ++i) {
+//           EEPROM.write(i, 0);
+//         }
+//         Serial.println(qsid);
+//         Serial.println("");
+//         Serial.println(qpass);
+//         Serial.println("");
+//         Serial.println("writing eeprom ssid:");
+//         for (int i = 0; i < qsid.length(); ++i)
+//         {
+//           EEPROM.write(i, qsid[i]);
+//           Serial.print("Wrote: ");
+//           Serial.println(qsid[i]);
+//         }
+//         Serial.println("writing eeprom pass:");
+//         for (int i = 0; i < qpass.length(); ++i)
+//         {
+//           EEPROM.write(32 + i, qpass[i]);
+//           Serial.print("Wrote: ");
+//           Serial.println(qpass[i]);
+//         }
+//         EEPROM.commit();
+//         content = "{\"Success\":\"saved to eeprom... reset to boot into new wifi\"}";
+//         statusCode = 200;
+//         ESP.reset();
+//       } else {
+//         content = "{\"Error\":\"404 not found\"}";
+//         statusCode = 404;
+//         Serial.println("Sending 404");
+//       }
+//       server.sendHeader("Access-Control-Allow-Origin", "*");
+//       server.send(statusCode, "application/json", content);
+//     });
+//   }
+// }
